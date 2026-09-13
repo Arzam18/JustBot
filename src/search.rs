@@ -298,14 +298,17 @@ pub fn search<Node: NodeType>(
     if !Node::ROOT && !in_check && !excluded && data.stack[ply - 1].eval != Score::NONE {
         // Hindsight Extension
         if depth < MAX_PLY as i32
-            && data.stack[ply - 1].reduction >= 3093
+            && data.stack[ply - 1].reduction.is_some_and(|r| r >= 3093)
             && static_eval + data.stack[ply - 1].eval <= 0
         {
             depth += 1;
         }
 
         // Hindsight Reduction
-        if depth >= 2 && data.stack[ply - 1].reduction >= 2078 && static_eval + data.stack[ply - 1].eval >= 211 {
+        if depth >= 2
+            && data.stack[ply - 1].reduction.is_some_and(|r| r >= 2078)
+            && static_eval + data.stack[ply - 1].eval >= 211
+        {
             depth -= 1;
         }
     }
@@ -421,6 +424,7 @@ pub fn search<Node: NodeType>(
     let mut best_move: Option<Move> = None;
     // Fail-high means score is atleast this good so lower-bound/Fail-low means the score is an upper bound
     let mut bound = Bound::Upper;
+    let mut average_r = 0;
 
     let mut move_picker = MovePicker::new(tt_move);
     let mut quiets_searched = StackVec::<Move, 32>::new();
@@ -504,13 +508,15 @@ pub fn search<Node: NodeType>(
             r += 454 * (tt_score.is_some_and(|s| s <= alpha)) as i32;
             r += 303 * (tt_depth.is_some_and(|d| d < depth)) as i32;
             r -= 439 * history / 4096;
+            r -= data.lmr_correction();
 
+            average_r = (average_r + r) / 2;
             let reduction = r / 1024;
             let reduced_depth = (new_depth - reduction).max(1) + Node::PV as i32;
 
-            data.stack[ply].reduction = r;
+            data.stack[ply].reduction = Some(r);
             score = -search::<NonPV>(data, reduced_depth, -alpha - 1, -alpha, ply + 1, true);
-            data.stack[ply].reduction = 0;
+            data.stack[ply].reduction = None;
 
             if score > alpha && reduced_depth < new_depth {
                 score = -search::<NonPV>(data, new_depth, -alpha - 1, -alpha, ply + 1, !cutnode);
@@ -655,6 +661,13 @@ pub fn search<Node: NodeType>(
     }
 
     if !excluded {
+        if depth >= 2
+            && move_count > 3
+            && let Some(r) = data.stack[ply - 1].reduction
+        {
+            data.update_lmr_history(r - average_r, depth);
+        }
+
         data.shared.tt.add_entry(
             best_move.unwrap_or(Move::NONE),
             best_score,
