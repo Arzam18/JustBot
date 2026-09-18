@@ -28,7 +28,9 @@ jobs:
           echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
 
-      - name: Build ARM64
+      - name: Build ARM64 NEON
+        env:
+          RUSTFLAGS: "-C target-cpu=generic -C target-feature=+neon,+crt-static"
         run: |
           cargo build \
             --release \
