@@ -3,10 +3,10 @@ name: Build JustBot ARM64
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "JustBot UCI version/date (example: 2026.09.15)"
+      uci_date:
+        description: "JustBot UCI version/date (example: 20260915)"
         required: true
-        default: "2026.09.15"
+        default: "20260915"
         type: string
 
 env:
@@ -21,37 +21,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set version
+      - name: Set UCI engine name
         env:
-          VERSION: ${{ inputs.version }}
+          UCI_DATE: ${{ inputs.uci_date }}
         run: |
           python3 - <<'PY'
           import os
-          import re
           from pathlib import Path
 
-          version = os.environ["VERSION"]
-          path = Path("Cargo.toml")
-
+          path = Path("src/uci.rs")
           text = path.read_text()
 
-          new_text, count = re.subn(
-              r'(?m)^version\s*=\s*"[^"]*"',
-              f'version = "{version}"',
-              text,
-              count=1
-          )
+          old = 'println!("id name JustBot {}", env!("CARGO_PKG_VERSION"));'
+          new = f'println!("id name JustBot {{}}", "{os.environ["UCI_DATE"]}");'
 
-          if count != 1:
-              raise SystemExit("Could not find package version in Cargo.toml")
+          if old not in text:
+              raise SystemExit(
+                  "ERROR: Could not find the expected UCI name line in src/uci.rs"
+              )
 
-          path.write_text(new_text)
+          text = text.replace(old, new, 1)
+          path.write_text(text)
 
-          print("Build version set to:", version)
+          print(f"UCI engine name set to: JustBot {os.environ['UCI_DATE']}")
           PY
 
-          echo "Updated Cargo.toml:"
-          grep '^version' Cargo.toml
+          echo "Checking modified UCI line:"
+          grep 'id name JustBot' src/uci.rs
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@1.95.0
