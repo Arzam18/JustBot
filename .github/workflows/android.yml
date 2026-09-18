@@ -29,25 +29,45 @@ jobs:
           import os
           from pathlib import Path
 
-          path = Path("src/uci.rs")
-          text = path.read_text()
+          uci_date = os.environ["UCI_DATE"]
 
           old = 'println!("id name JustBot {}", env!("CARGO_PKG_VERSION"));'
-          new = f'println!("id name JustBot {{}}", "{os.environ["UCI_DATE"]}");'
 
-          if old not in text:
+          matches = []
+
+          for path in Path(".").rglob("*.rs"):
+              try:
+                  text = path.read_text()
+              except (UnicodeDecodeError, OSError):
+                  continue
+
+              if old in text:
+                  matches.append(path)
+
+          if len(matches) == 0:
               raise SystemExit(
-                  "ERROR: Could not find the expected UCI name line in src/uci.rs"
+                  "ERROR: Could not find the JustBot UCI name line."
               )
+
+          if len(matches) > 1:
+              raise SystemExit(
+                  f"ERROR: Found the UCI name line in multiple files: {matches}"
+              )
+
+          path = matches[0]
+          text = path.read_text()
+
+          new = f'println!("id name JustBot {{}}", "{uci_date}");'
 
           text = text.replace(old, new, 1)
           path.write_text(text)
 
-          print(f"UCI engine name set to: JustBot {os.environ['UCI_DATE']}")
+          print(f"Modified file: {path}")
+          print(f"UCI engine name: JustBot {uci_date}")
           PY
 
-          echo "Checking modified UCI line:"
-          grep 'id name JustBot' src/uci.rs
+          echo "Modified UCI line:"
+          grep -R 'id name JustBot' --include='*.rs' .
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@1.95.0
