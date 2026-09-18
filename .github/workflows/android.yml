@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "JustBot UCI version/date (example: 20260915)"
+        description: "JustBot UCI version/date (example: 2026.09.15)"
         required: true
-        default: "20260915"
+        default: "2026.09.15"
         type: string
 
 env:
