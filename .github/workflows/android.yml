@@ -1,0 +1,53 @@
+name: Build JustBot ARM64
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build justbot-linux-aarch64-neon
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-unknown-linux-musl
+
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+          echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+
+      - name: Build ARM64
+        run: |
+          cargo build \
+            --release \
+            --target aarch64-unknown-linux-musl
+
+      - name: Rename binary
+        run: |
+          mv \
+            target/aarch64-unknown-linux-musl/release/justbot \
+            justbot-linux-aarch64-neon
+
+      - name: Verify binary
+        run: |
+          file justbot-linux-aarch64-neon
+          ls -lh justbot-linux-aarch64-neon
+
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: justbot-linux-aarch64-neon
+          path: justbot-linux-aarch64-neon
+          retention-days: 1
