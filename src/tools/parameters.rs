@@ -33,14 +33,16 @@ macro_rules! tunable_params {
         pub fn print_params_ob() {
             $(
                 if $spsa {
-                    let step = (($max - $min) / 20).max(1);
+                    let c_end = (($max - $min) as f32 / 20.0);
+                    let r_end = 0.002 / (c_end.min(0.5) / 0.5);
                     println!(
-                        "{}, int, {}.0, {}.0, {}.0, {}, 0.002",
+                        "{}, int, {}.0, {}.0, {}.0, {}, {}",
                         stringify!($name),
                         $name(),
                         $min,
                         $max,
-                        step,
+                        c_end,
+                        r_end,
                     );
                 }
             )*
