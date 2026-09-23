@@ -5,11 +5,12 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use crate::board::Board;
 use crate::nnue::Network;
 use crate::search::time::{Limit, TimeManager};
+use crate::tools::wdl::{self, normalize_score};
 use crate::types::pv::PVTable;
 use crate::types::stack::Stack;
 use crate::types::{
     ContinuationCorrectionHistory, ContinuationHistory, CorrectionHistory, Move, NoisyHistory, PawnHistory,
-    STARTING_FEN, Score, Side, is_decisive,
+    STARTING_FEN, Score, Side, is_decisive, is_loss, is_win,
 };
 use crate::types::{QuietHistory, TranspositionTable};
 
@@ -38,6 +39,7 @@ pub struct SharedData {
     pub tt: TranspositionTable,
     pub history: SharedCorrectionHistories,
     pub status: Status,
+    show_wdl: AtomicBool,
     nodes: Box<[AlignedAtomicU64; 512]>,
 }
 
@@ -65,6 +67,14 @@ impl SharedData {
             t.0.store(0, Ordering::Relaxed);
         }
     }
+
+    pub fn set_show_wdl(&self, val: bool) {
+        self.show_wdl.store(val, Ordering::Relaxed);
+    }
+
+    pub fn show_wdl(&self) -> bool {
+        self.show_wdl.load(Ordering::Relaxed)
+    }
 }
 
 impl Default for SharedData {
@@ -73,6 +83,7 @@ impl Default for SharedData {
             history: SharedCorrectionHistories::default(),
             tt: TranspositionTable::default(),
             status: Status(AtomicBool::new(Status::RUNNING)),
+            show_wdl: AtomicBool::new(true),
             nodes: Box::new(array::from_fn(|_| AlignedAtomicU64(AtomicU64::new(0)))),
         }
     }
@@ -259,9 +270,17 @@ impl SearchData {
             return;
         };
 
+        print!(
+            "info depth {} seldepth {} time {} nodes {} nps {} score",
+            root_move.searched_depth,
+            root_move.sel_depth,
+            self.time.elapsed().as_millis(),
+            self.shared.total_nodes_searched(),
+            self.nodes_per_second()
+        );
+
         let mut upperbound = root_move.upperbound;
         let mut lowerbound = root_move.lowerbound;
-
         let mut score = root_move.display_score;
 
         if root_move.score == -Score::INFINITY {
@@ -271,43 +290,42 @@ impl SearchData {
             lowerbound = false;
         }
 
-        // Report mate score
-        let mut score_print = if is_decisive(score) {
+        if is_decisive(score) {
             let num_plies = Score::MATE - score.abs();
             let mate_in = score.signum() * ((num_plies + 1) / 2);
-            format!("mate {}", mate_in)
+            print!(" mate {}", mate_in);
         } else {
-            format!("cp {}", score)
-        };
+            print!(" cp {}", normalize_score(score, &self.board));
+        }
 
         if upperbound {
-            score_print.push_str(" upperbound");
+            print!(" upperbound");
         }
 
         if lowerbound {
-            score_print.push_str(" lowerbound");
+            print!(" lowerbound");
         }
 
-        let pv_display = {
-            let mut output = format!("{} ", root_move.m.to_uci(&self.board));
-            for m in &root_move.pv.inner {
-                output = format!("{output}{} ", m.to_uci(&self.board));
+        if self.shared.show_wdl() {
+            if is_win(score) {
+                print!(" wdl 1000 0 0");
+            } else if is_loss(score) {
+                print!(" wdl 0 0 1000");
+            } else {
+                let (win, loss) = wdl::wdl_model(score, &self.board);
+                let draw = 1000 - win - loss;
+                print!(" wdl {} {} {}", win, draw, loss);
             }
+        }
 
-            output
-        };
+        print!(" hashfull {}", self.shared.tt.hashfull());
 
-        println!(
-            "info depth {} seldepth {} time {} score {} nodes {} nps {} pv {} hashfull {}",
-            root_move.searched_depth,
-            root_move.sel_depth,
-            self.time.elapsed().as_millis(),
-            score_print,
-            self.shared.total_nodes_searched(),
-            self.nodes_per_second(),
-            pv_display,
-            self.shared.tt.hashfull(),
-        );
+        print!(" pv {}", root_move.m.to_uci(&self.board));
+        for m in &root_move.pv.inner {
+            print!(" {}", m.to_uci(&self.board));
+        }
+
+        println!();
     }
 
     pub fn make_move(&mut self, m: Move, ply: isize) {
