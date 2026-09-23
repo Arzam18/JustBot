@@ -14,6 +14,7 @@
 |                  |             |     CCRL      |              |            |    COPE    |            |
 | :--------------: | :---------: | :-----------: | :----------: | :--------: | :--------: | :--------: |
 |                  |  **40/15**  | **Blitz 2+1** | **40/2 FRC** | **Bullet** | **Rapid**  |  **DFRC**  |
+| [v0.5.0][v0.5.0] |     --      |      --       |      --      |     --     |     --     |     --     |
 | [v0.4.0][v0.4.0] | 3518 [#72]  |      --       |  3862 [#36]  | 3601 [#25] | 3580 [#29] | 3600 [#24] |
 | [v0.3.0][v0.3.0] | 3418 [#115] |      --       |      --      | 3426 [#37] | 3467 [#40] |     --     |
 | [v0.2.0][v0.2.0] | 3124 [#226] |      --       |      --      |     --     |     --     |     --     |
@@ -23,12 +24,14 @@
 [v0.2.0]: https://github.com/HasanFakih21/JustBot/releases/tag/v0.2.0
 [v0.3.0]: https://github.com/HasanFakih21/JustBot/releases/tag/v0.3.0
 [v0.4.0]: https://github.com/HasanFakih21/JustBot/releases/tag/v0.4.0
+[v0.5.0]: https://github.com/HasanFakih21/JustBot/releases/tag/v0.5.0
 
 You can find precompiled binaries for Linux, Windows and macOS [here](https://github.com/HasanFakih21/JustBot/releases)
 
 - `avx512`: The fastest build, only compatible with newer CPUs
 - `avx2`: Usable on most modern CPUs
 - `generic`: The slowest build, should run on any x86-64 CPU.
+- `aarch64-neon`: For Android devices.
 
 ## Building the project
 
@@ -51,12 +54,15 @@ make
 
 ## Supported UCI Options
 
-|     Name     | Default |   Max   |                   Description                   |
-| :----------: | :-----: | :-----: | :---------------------------------------------: |
-|     Hash     |   16    | 1048576 | Sets the size of the transposition table in MB  |
-|  Clear Hash  |   --    |   --    |  Clears all entries in the transposition table  |
-|   Threads    |    1    |   512   | Sets the number of threads to use during search |
-| UCI_Chess960 |  false  |   --    |            Enables Chess960 support             |
+|     Name     | Default |   Max   |                                                    Description                                                    |
+| :----------: | :-----: | :-----: | :---------------------------------------------------------------------------------------------------------------: |
+|     Hash     |   16    | 1048576 |                                  Sets the size of the transposition table in MB                                   |
+|  Clear Hash  |   --    |   --    |                                   Clears all entries in the transposition table                                   |
+|   Threads    |    1    |   512   |                                  Sets the number of threads to use during search                                  |
+| UCI_Chess960 |  false  |   --    |                                             Enables Chess960 support                                              |
+|   Minimal    |  false  |   --    |                                                Minimal UCI output                                                 |
+|  SoftNodes   |  false  |   --    | When a node limit is set, it will finish the current depth after hitting the limit rather than stopping instantly |
+| UCI_ShowWDL  |  true   |   --    |                              Displays the win/draw/loss probabilities in UCI output                               |
 
 ## Acknowledgments
 
