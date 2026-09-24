@@ -13,6 +13,7 @@ use crate::{
         data::{RootMove, SearchData},
         time::{Limit, NodeKind, TimeManager},
     },
+    tools::wdl::normalize_score,
     types::STARTING_FEN,
 };
 
@@ -73,8 +74,9 @@ fn generate_random_opening(
     // Check if eval is not too uneven
     validation_search(data, Limit::Nodes(NodeKind::Soft(20_000)));
     let Some(best_move) = data.best_move.as_ref() else { return Err(BadRandomBoard) };
+    let score = normalize_score(best_move.score, &data.board);
 
-    if best_move.score.abs() > 400 || best_move.score.abs() < 25 {
+    if score.abs() > 400 || score.abs() < 50 {
         return Err(BadRandomBoard);
     }
 
