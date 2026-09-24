@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use crate::board::Board;
 use crate::nnue::Network;
 use crate::search::time::{Limit, TimeManager};
-use crate::tools::wdl::{self, normalize_score};
+use crate::tools::wdl;
 use crate::types::pv::PVTable;
 use crate::types::stack::Stack;
 use crate::types::{
@@ -295,7 +295,10 @@ impl SearchData {
             let mate_in = score.signum() * ((num_plies + 1) / 2);
             print!(" mate {}", mate_in);
         } else {
-            print!(" cp {}", normalize_score(score, &self.board));
+            #[cfg(not(feature = "datagen"))]
+            print!(" cp {}", wdl::normalize_score(score, &self.board));
+            #[cfg(feature = "datagen")]
+            print!(" cp {}", score);
         }
 
         if upperbound {
