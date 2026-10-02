@@ -6,7 +6,7 @@ on:
       uci_date:
         description: "JustBot UCI version/date (example: 20260924)"
         required: true
-        default: "20260928"
+        default: "20261002"
         type: string
 
 env:
