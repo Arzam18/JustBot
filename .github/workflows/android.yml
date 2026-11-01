@@ -1,3 +1,4 @@
+
 name: Build JustBot ARM64
 
 on:
@@ -21,53 +22,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set UCI engine name
+      - name: Set UCI engine version
         env:
           UCI_DATE: ${{ inputs.uci_date }}
         run: |
+          set -euo pipefail
+
           python3 - <<'PY'
           import os
+          import re
           from pathlib import Path
 
-          uci_date = os.environ["UCI_DATE"]
+          path = Path("build.rs")
+          source = path.read_text()
 
-          old = 'println!("id name JustBot {}", env!("CARGO_PKG_VERSION"));'
+          pattern = r'fn set_engine_version\(\) \{.*?\n\}'
 
-          matches = []
+          replacement = '''fn set_engine_version() {
+              let version = env::var("UCI_DATE")
+                  .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
 
-          for path in Path(".").rglob("*.rs"):
-              try:
-                  text = path.read_text()
-              except (UnicodeDecodeError, OSError):
-                  continue
+              println!("cargo::rustc-env=ENGINE_VERSION={version}");
+              println!("cargo::rerun-if-env-changed=UCI_DATE");
+          }'''
 
-              if old in text:
-                  matches.append(path)
+          updated, count = re.subn(
+              pattern,
+              lambda _: replacement,
+              source,
+              count=1,
+              flags=re.DOTALL
+          )
 
-          if len(matches) == 0:
+          if count != 1:
               raise SystemExit(
-                  "ERROR: Could not find the JustBot UCI name line."
+                  "ERROR: Could not locate set_engine_version() in build.rs"
               )
 
-          if len(matches) > 1:
-              raise SystemExit(
-                  f"ERROR: Found the UCI name line in multiple files: {matches}"
-              )
+          path.write_text(updated)
 
-          path = matches[0]
-          text = path.read_text()
-
-          new = f'println!("id name JustBot {{}}", "{uci_date}");'
-
-          text = text.replace(old, new, 1)
-          path.write_text(text)
-
-          print(f"Modified file: {path}")
-          print(f"UCI engine name: JustBot {uci_date}")
+          print("Updated build.rs successfully.")
+          print(f"UCI engine name: JustBot {os.environ['UCI_DATE']}")
           PY
 
-          echo "Modified UCI line:"
-          grep -R 'id name JustBot' --include='*.rs' .
+          grep -A7 'fn set_engine_version' build.rs
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@1.95.0
@@ -85,6 +83,7 @@ jobs:
       - name: Build ARM64 NEON
         env:
           RUSTFLAGS: "-C target-cpu=generic -C target-feature=+neon,+crt-static"
+          UCI_DATE: ${{ inputs.uci_date }}
         run: |
           cargo build \
             --release \
@@ -96,13 +95,22 @@ jobs:
             target/aarch64-unknown-linux-musl/release/justbot \
             justbot-linux-aarch64-neon
 
-      - name: Verify binary
+      - name: Verify binary and UCI name
+        env:
+          UCI_DATE: ${{ inputs.uci_date }}
         run: |
+          set -euo pipefail
+
           file justbot-linux-aarch64-neon
           ls -lh justbot-linux-aarch64-neon
 
           echo "Checking UCI identification:"
-          printf "uci\nquit\n" | ./justbot-linux-aarch64-neon
+
+          printf "uci\nquit\n" | ./justbot-linux-aarch64-neon | tee uci-output.txt
+
+          grep -Fx "id name JustBot $UCI_DATE" uci-output.txt
+
+          echo "UCI identification verified successfully."
 
       - name: Upload ARM64 artifact
         uses: actions/upload-artifact@v5
