@@ -301,6 +301,14 @@ pub fn search<Node: NodeType>(
     let improving = improvement > 0;
 
     if !Node::ROOT && !in_check && !excluded && data.stack[ply - 1].eval != Score::NONE {
+        // Update History Based on Evaluation Difference
+        if data.stack[ply - 1].m.is_quiet() && depth < 6 {
+            let value = 10 * -(static_eval + data.stack[ply - 1].eval);
+            let bonus = value.clamp(-65, 200);
+            data.quiet_history
+                .update(data.stack[ply - 1].threats, !stm, data.stack[ply - 1].m, bonus);
+        }
+
         // Hindsight Extension
         if depth < MAX_PLY as i32
             && data.stack[ply - 1].reduction.is_some_and(|r| r >= 3167)
@@ -570,7 +578,7 @@ pub fn search<Node: NodeType>(
 
         // Make Move
         data.make_move(m, ply);
-        let new_depth = (depth - 1) + ((move_count == 1) as i32 * extension);
+        let mut new_depth = (depth - 1) + ((move_count == 1) as i32 * extension);
         let mut score = -Score::INFINITY;
 
         // Late Move Reductions (LMR)
@@ -595,8 +603,15 @@ pub fn search<Node: NodeType>(
             score = -search::<NonPV>(data, reduced_depth, -alpha - 1, -alpha, ply + 1, true);
             data.stack[ply].reduction = None;
 
-            if score > alpha && reduced_depth < new_depth {
-                score = -search::<NonPV>(data, new_depth, -alpha - 1, -alpha, ply + 1, !cutnode);
+            if score > alpha {
+                let do_deeper = score > best_score + 50;
+                let do_shallower = score < best_score + 8;
+
+                new_depth += do_deeper as i32 - do_shallower as i32;
+
+                if reduced_depth < new_depth {
+                    score = -search::<NonPV>(data, new_depth, -alpha - 1, -alpha, ply + 1, !cutnode);
+                }
             }
         } else if !Node::PV || move_count > 1 {
             score = -search::<NonPV>(data, new_depth, -alpha - 1, -alpha, ply + 1, !cutnode);
@@ -708,13 +723,13 @@ pub fn search<Node: NodeType>(
             let pawn_key = data.board.state.keys.pawn;
             data.pawn_history.update(pawn_key, piece, to, quiet_bonus);
             data.quiet_history.update(threats, stm, m, quiet_bonus);
-            data.update_conthistories(m, ply, cont_bonus);
+            data.update_conthistories(piece, to, ply, cont_bonus);
             for quiet_move in quiets_searched.iter() {
                 let piece = data.board.piece_at_square(quiet_move.from());
                 let to = quiet_move.to();
                 data.pawn_history.update(pawn_key, piece, to, -quiet_malus);
                 data.quiet_history.update(threats, stm, *quiet_move, -quiet_malus);
-                data.update_conthistories(*quiet_move, ply, -cont_malus);
+                data.update_conthistories(piece, to, ply, -cont_malus);
             }
         } else {
             let piece = data.board.piece_at_square(m.from());
