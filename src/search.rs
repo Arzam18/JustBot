@@ -71,10 +71,10 @@ pub fn search_runner(data: &mut SearchData) {
         data.root_depth = depth;
 
         if data.id == 0
-            && (match data.time.limit {
+            && ((match data.time.limit {
                 Limit::Depth(limit) => depth > limit,
                 _ => data.time.hard_limit(data),
-            })
+            }) || depth > MAX_PLY as i32)
         {
             data.shared.status.stop();
             break;
@@ -105,6 +105,7 @@ pub fn search_runner(data: &mut SearchData) {
 
         data.completed_depth = depth;
         data.sel_depth = 0;
+
         depth += 1;
 
         data.root_moves.sort_by_key(|rm| std::cmp::Reverse(rm.score));
@@ -183,6 +184,13 @@ pub fn search<Node: NodeType>(
         return quiesce::<Node>(data, alpha, beta, ply);
     }
 
+    if !Node::ROOT && alpha < Score::DRAW && data.board.upcoming_repetition(ply as usize) {
+        alpha = Score::DRAW;
+        if alpha >= beta {
+            return alpha;
+        }
+    }
+
     let stm = data.board.state.side_to_move;
     let in_check = data.board.king_in_check();
     let excluded = !data.stack[ply].excluded.is_null();
@@ -248,7 +256,9 @@ pub fn search<Node: NodeType>(
             data.quiet_history.update(data.board.threats(), stm, tt_move, bonus);
         }
 
-        return tt_score;
+        if data.board.state.half_move_clock < 90 {
+            return tt_score;
+        }
     }
 
     // Evaluation
@@ -588,6 +598,8 @@ pub fn search<Node: NodeType>(
             r += 1270 * cutnode as i32;
             r += 1984 * (cutnode && tt_move.is_none()) as i32;
             r -= 1240 * tt_was_pv as i32;
+            r -= 600 * (tt_pv && tt_score.is_some_and(|s| s > alpha)) as i32;
+            r -= 600 * (tt_pv && tt_depth.is_some_and(|d| d >= depth)) as i32;
             r -= 859 * is_direct_check as i32;
             r += 202 * !improving as i32;
             r += 474 * (tt_score.is_some_and(|s| s <= alpha)) as i32;
@@ -787,6 +799,13 @@ pub fn quiesce<Node: NodeType>(data: &mut SearchData, mut alpha: i32, beta: i32,
     if Node::PV {
         data.pv.clear(ply);
         data.sel_depth = data.sel_depth.max(ply as i32);
+    }
+
+    if alpha < Score::DRAW && data.board.upcoming_repetition(ply as usize) {
+        alpha = Score::DRAW;
+        if alpha >= beta {
+            return alpha;
+        }
     }
 
     if data.board.is_draw() {
